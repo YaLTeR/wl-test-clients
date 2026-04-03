@@ -1,0 +1,23 @@
+[package]
+name = "sctk-test-clients"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wayland-client = "0.31.1"
+wayland-protocols = { version = "0.32.9", features = ["client", "staging", "unstable"] }
+libc = "0.2"
+
+[dependencies.smithay-client-toolkit]
+git = "https://github.com/Smithay/client-toolkit.git"
+# ext-background-effect PR
+rev = "850a04ea358eb8018e46fbb27cd6688cf9b2c175"
+features = ["calloop", "xkbcommon"]
+
+[[bin]]
+name = "dmabuf_y_invert"
+path = "src/dmabuf_y_invert.rs"
+
+[[bin]]
+name = "popup_background_effect"
+path = "src/popup_background_effect.rs"
