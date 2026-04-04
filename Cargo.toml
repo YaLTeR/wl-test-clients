@@ -21,3 +21,7 @@ path = "src/dmabuf_y_invert.rs"
 [[bin]]
 name = "popup_background_effect"
 path = "src/popup_background_effect.rs"
+
+[[bin]]
+name = "subsurface_no_geometry"
+path = "src/subsurface_no_geometry.rs"
