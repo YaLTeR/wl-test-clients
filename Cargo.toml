@@ -25,3 +25,7 @@ path = "src/popup_background_effect.rs"
 [[bin]]
 name = "subsurface_no_geometry"
 path = "src/subsurface_no_geometry.rs"
+
+[[bin]]
+name = "layer_shell_popups"
+path = "src/layer_shell_popups.rs"
