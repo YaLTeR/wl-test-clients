@@ -29,3 +29,7 @@ path = "src/subsurface_no_geometry.rs"
 [[bin]]
 name = "layer_shell_popups"
 path = "src/layer_shell_popups.rs"
+
+[[bin]]
+name = "blur_region_switch_half"
+path = "src/blur_region_switch_half.rs"
