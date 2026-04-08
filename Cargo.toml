@@ -10,9 +10,8 @@ libc = "0.2"
 
 [dependencies.smithay-client-toolkit]
 git = "https://github.com/Smithay/client-toolkit.git"
-# ext-background-effect PR
-rev = "850a04ea358eb8018e46fbb27cd6688cf9b2c175"
-features = ["calloop", "xkbcommon"]
+# ext-background-effect merged
+rev = "99ddfec6bc68d3a5d47d9554f973b34aebab0b83"
 
 [[bin]]
 name = "dmabuf_y_invert"

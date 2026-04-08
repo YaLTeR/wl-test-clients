@@ -248,7 +248,7 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 [[package]]
 name = "smithay-client-toolkit"
 version = "0.20.0"
-source = "git+https://github.com/Smithay/client-toolkit.git?rev=850a04ea358eb8018e46fbb27cd6688cf9b2c175#850a04ea358eb8018e46fbb27cd6688cf9b2c175"
+source = "git+https://github.com/Smithay/client-toolkit.git?rev=99ddfec6bc68d3a5d47d9554f973b34aebab0b83#99ddfec6bc68d3a5d47d9554f973b34aebab0b83"
 dependencies = [
  "bitflags",
  "bytemuck",
