@@ -1,7 +1,9 @@
 //! This example creates a window using dmabuf buffers.
-//! Pressing spacebar switches between a normal dmabuf and one with the y_invert flag.
-//! The rendered contents are vertically flipped versions of each other, so pressing space
-//! should not visually change anything if y_invert is handled correctly by the compositor.
+//! Pressing spacebar toggles the y_invert dmabuf flag.
+//! Pressing 1..=8 selects a wl_surface::set_buffer_transform value.
+//! For every combination of y_invert and buffer_transform the buffer contents
+//! are pre-transformed so that the surface should appear identical if the
+//! compositor handles everything correctly.
 
 use std::os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd};
 use std::time::Duration;
@@ -18,7 +20,7 @@ use smithay_client_toolkit::{
     registry_handlers,
     seat::{
         keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
-        pointer::{PointerEvent, PointerEventKind, PointerHandler},
+        pointer::{PointerEvent, PointerHandler},
         Capability, SeatHandler, SeatState,
     },
     shell::{
@@ -216,28 +218,93 @@ fn open_drm_device() -> Option<OwnedFd> {
     None
 }
 
-/// Draw a gradient pattern. When `y_inverted` is true, the rows are flipped so that
-/// applying the y_invert flag (vertical flip by the compositor) produces the same image.
-fn draw_gradient(width: u32, height: u32, y_inverted: bool) -> Vec<u8> {
-    let stride = width * 4;
-    let mut data = vec![0u8; (stride * height) as usize];
-    for y in 0..height {
-        let src_y = if y_inverted { height - 1 - y } else { y };
-        for x in 0..width {
-            let offset = (y * stride + x * 4) as usize;
-            let a = 0xFFu32;
-            let r = u32::min(
-                ((width - x) * 0xFF) / width,
-                ((height - src_y) * 0xFF) / height,
-            );
-            let g = u32::min((x * 0xFF) / width, ((height - src_y) * 0xFF) / height);
-            let b = u32::min(((width - x) * 0xFF) / width, (src_y * 0xFF) / height);
-            let color = (a << 24) | (r << 16) | (g << 8) | b;
+/// The intended color at surface coordinates (sx, sy).
+fn target_color(sx: u32, sy: u32, surface_width: u32, surface_height: u32) -> u32 {
+    let a = 0xFFu32;
+    let r = u32::min(
+        ((surface_width - sx) * 0xFF) / surface_width,
+        ((surface_height - sy) * 0xFF) / surface_height,
+    );
+    let g = u32::min(
+        (sx * 0xFF) / surface_width,
+        ((surface_height - sy) * 0xFF) / surface_height,
+    );
+    let b = u32::min(
+        ((surface_width - sx) * 0xFF) / surface_width,
+        (sy * 0xFF) / surface_height,
+    );
+    (a << 24) | (r << 16) | (g << 8) | b
+}
+
+/// Buffer dimensions for the given surface dimensions and buffer_transform.
+/// 90/270 transforms swap the dimensions.
+fn buffer_dims(sw: u32, sh: u32, transform: wl_output::Transform) -> (u32, u32) {
+    use wl_output::Transform::*;
+    match transform {
+        Normal | _180 | Flipped | Flipped180 => (sw, sh),
+        _90 | _270 | Flipped90 | Flipped270 => (sh, sw),
+        _ => (sw, sh),
+    }
+}
+
+/// Map surface-space (sx, sy) to buffer-space (bx, by) for the given transform.
+/// The compositor applies the inverse transform when using the buffer, so writing
+/// `target_color(sx, sy)` at `map(sx, sy)` produces the desired surface image.
+fn map_surface_to_buffer(
+    sx: u32,
+    sy: u32,
+    sw: u32,
+    sh: u32,
+    transform: wl_output::Transform,
+) -> (u32, u32) {
+    use wl_output::Transform::*;
+    match transform {
+        Normal => (sx, sy),
+        _90 => (sy, sw - 1 - sx),
+        _180 => (sw - 1 - sx, sh - 1 - sy),
+        _270 => (sh - 1 - sy, sx),
+        Flipped => (sw - 1 - sx, sy),
+        Flipped90 => (sy, sx),
+        Flipped180 => (sx, sh - 1 - sy),
+        Flipped270 => (sh - 1 - sy, sw - 1 - sx),
+        _ => (sx, sy),
+    }
+}
+
+/// Render buffer pixel data that, when the compositor applies the inverse of
+/// `transform` (and a vertical flip if `y_inverted`), results in the original
+/// gradient at surface coordinates.
+fn draw_transformed_gradient(
+    surface_width: u32,
+    surface_height: u32,
+    transform: wl_output::Transform,
+    y_inverted: bool,
+) -> (u32, u32, Vec<u8>) {
+    let (bw, bh) = buffer_dims(surface_width, surface_height, transform);
+    let stride = bw * 4;
+    let mut data = vec![0u8; (stride * bh) as usize];
+    for sy in 0..surface_height {
+        for sx in 0..surface_width {
+            let color = target_color(sx, sy, surface_width, surface_height);
+            let (bx, by) = map_surface_to_buffer(sx, sy, surface_width, surface_height, transform);
+            let by = if y_inverted { bh - 1 - by } else { by };
+            let offset = (by * stride + bx * 4) as usize;
             data[offset..offset + 4].copy_from_slice(&color.to_le_bytes());
         }
     }
-    data
+    (bw, bh, data)
 }
+
+const TRANSFORMS: [wl_output::Transform; 8] = [
+    wl_output::Transform::Normal,
+    wl_output::Transform::_90,
+    wl_output::Transform::_180,
+    wl_output::Transform::_270,
+    wl_output::Transform::Flipped,
+    wl_output::Transform::Flipped90,
+    wl_output::Transform::Flipped180,
+    wl_output::Transform::Flipped270,
+];
 
 // --- Wayland application ---
 
@@ -276,10 +343,9 @@ fn main() {
         width: 256,
         height: 256,
         use_y_invert: false,
-        normal_buffer: None,
-        y_invert_buffer: None,
-        normal_dumb: None,
-        y_invert_dumb: None,
+        buffer_transform: wl_output::Transform::Normal,
+        current_buffer: None,
+        current_dumb: None,
         drm_fd,
         window,
         keyboard: None,
@@ -310,10 +376,9 @@ struct DmabufWindow {
     width: u32,
     height: u32,
     use_y_invert: bool,
-    normal_buffer: Option<wl_buffer::WlBuffer>,
-    y_invert_buffer: Option<wl_buffer::WlBuffer>,
-    normal_dumb: Option<DumbBuffer>,
-    y_invert_dumb: Option<DumbBuffer>,
+    buffer_transform: wl_output::Transform,
+    current_buffer: Option<wl_buffer::WlBuffer>,
+    current_dumb: Option<DumbBuffer>,
     drm_fd: OwnedFd,
     window: Window,
     keyboard: Option<wl_keyboard::WlKeyboard>,
@@ -323,89 +388,57 @@ struct DmabufWindow {
 }
 
 impl DmabufWindow {
-    fn create_buffers(&mut self, qh: &QueueHandle<Self>) {
-        // Destroy old wl_buffers.
-        if let Some(buf) = self.normal_buffer.take() {
+    fn rebuild_buffer(&mut self, qh: &QueueHandle<Self>) {
+        if let Some(buf) = self.current_buffer.take() {
             buf.destroy();
         }
-        if let Some(buf) = self.y_invert_buffer.take() {
-            buf.destroy();
-        }
-        self.normal_dumb = None;
-        self.y_invert_dumb = None;
+        self.current_dumb = None;
 
-        let width = self.width;
-        let height = self.height;
-
-        // Create normal buffer.
-        let normal_data = draw_gradient(width, height, false);
-        let normal_dumb = DumbBuffer::create(&self.drm_fd, width, height, &normal_data);
+        let (bw, bh, data) = draw_transformed_gradient(
+            self.width,
+            self.height,
+            self.buffer_transform,
+            self.use_y_invert,
+        );
+        let dumb = DumbBuffer::create(&self.drm_fd, bw, bh, &data);
 
         let params = self
             .dmabuf_state
             .create_params(qh)
             .expect("Failed to create dmabuf params");
         params.add(
-            normal_dumb.dmabuf_fd.as_fd(),
+            dumb.dmabuf_fd.as_fd(),
             0,
             0,
-            normal_dumb.stride,
+            dumb.stride,
             DRM_FORMAT_MOD_LINEAR,
         );
-        let (normal_wl_buf, _) = params.create_immed(
-            width as i32,
-            height as i32,
-            DRM_FORMAT_XRGB8888,
-            zwp_linux_buffer_params_v1::Flags::empty(),
-            qh,
-        );
-
-        // Create y-inverted buffer.
-        let yi_data = draw_gradient(width, height, true);
-        let yi_dumb = DumbBuffer::create(&self.drm_fd, width, height, &yi_data);
-
-        let yi_params = self
-            .dmabuf_state
-            .create_params(qh)
-            .expect("Failed to create dmabuf params");
-        yi_params.add(
-            yi_dumb.dmabuf_fd.as_fd(),
-            0,
-            0,
-            yi_dumb.stride,
-            DRM_FORMAT_MOD_LINEAR,
-        );
-        let (yinvert_wl_buf, _) = yi_params.create_immed(
-            width as i32,
-            height as i32,
-            DRM_FORMAT_XRGB8888,
-            zwp_linux_buffer_params_v1::Flags::YInvert,
-            qh,
-        );
+        let flags = if self.use_y_invert {
+            zwp_linux_buffer_params_v1::Flags::YInvert
+        } else {
+            zwp_linux_buffer_params_v1::Flags::empty()
+        };
+        let (wl_buf, _) = params.create_immed(bw as i32, bh as i32, DRM_FORMAT_XRGB8888, flags, qh);
 
         println!(
-            "Created dmabuf buffers: {}x{}, stride={}, using y_invert={}",
-            width, height, normal_dumb.stride, self.use_y_invert
+            "Rebuilt dmabuf buffer: {}x{} (surface {}x{}), stride={}, y_invert={}, transform={:?}",
+            bw, bh, self.width, self.height, dumb.stride, self.use_y_invert, self.buffer_transform
         );
 
-        self.normal_buffer = Some(normal_wl_buf);
-        self.y_invert_buffer = Some(yinvert_wl_buf);
-        self.normal_dumb = Some(normal_dumb);
-        self.y_invert_dumb = Some(yi_dumb);
+        self.current_buffer = Some(wl_buf);
+        self.current_dumb = Some(dumb);
     }
 
     fn draw(&mut self) {
-        let buffer = if self.use_y_invert {
-            self.y_invert_buffer.as_ref()
-        } else {
-            self.normal_buffer.as_ref()
+        let Some(buffer) = self.current_buffer.as_ref() else {
+            return;
         };
 
-        let Some(buffer) = buffer else { return };
-
         let surface = self.window.wl_surface();
+        surface.set_buffer_transform(self.buffer_transform);
         surface.attach(Some(buffer), 0, 0);
-        surface.damage_buffer(0, 0, self.width as i32, self.height as i32);
+        let (bw, bh) = buffer_dims(self.width, self.height, self.buffer_transform);
+        surface.damage_buffer(0, 0, bw as i32, bh as i32);
         self.window.commit();
     }
 }
@@ -511,8 +544,7 @@ impl WindowHandler for DmabufWindow {
 
         if size_changed || self.first_configure {
             self.first_configure = false;
-            // Recreate buffers at the new size.
-            self.create_buffers(qh);
+            self.rebuild_buffer(qh);
             self.draw();
         }
     }
@@ -533,7 +565,6 @@ impl SeatHandler for DmabufWindow {
         capability: Capability,
     ) {
         if capability == Capability::Keyboard && self.keyboard.is_none() {
-            println!("Set keyboard capability");
             let keyboard = self
                 .seat_state
                 .get_keyboard_with_repeat(
@@ -541,16 +572,13 @@ impl SeatHandler for DmabufWindow {
                     &seat,
                     None,
                     self.loop_handle.clone(),
-                    Box::new(|_state, _wl_kbd, event| {
-                        println!("Repeat: {:?} ", event);
-                    }),
+                    Box::new(|_state, _wl_kbd, _event| {}),
                 )
                 .expect("Failed to create keyboard");
             self.keyboard = Some(keyboard);
         }
 
         if capability == Capability::Pointer && self.pointer.is_none() {
-            println!("Set pointer capability");
             let pointer = self
                 .seat_state
                 .get_pointer(qh, &seat)
@@ -567,12 +595,10 @@ impl SeatHandler for DmabufWindow {
         capability: Capability,
     ) {
         if capability == Capability::Keyboard && self.keyboard.is_some() {
-            println!("Unset keyboard capability");
             self.keyboard.take().unwrap().release();
         }
 
         if capability == Capability::Pointer && self.pointer.is_some() {
-            println!("Unset pointer capability");
             self.pointer.take().unwrap().release();
         }
     }
@@ -591,8 +617,8 @@ impl KeyboardHandler for DmabufWindow {
         _: &[u32],
         keysyms: &[Keysym],
     ) {
+        let _ = keysyms;
         if self.window.wl_surface() == surface {
-            println!("Keyboard focus on window with pressed syms: {keysyms:?}");
             self.keyboard_focus = true;
         }
     }
@@ -606,7 +632,6 @@ impl KeyboardHandler for DmabufWindow {
         _: u32,
     ) {
         if self.window.wl_surface() == surface {
-            println!("Release keyboard focus on window");
             self.keyboard_focus = false;
         }
     }
@@ -614,23 +639,30 @@ impl KeyboardHandler for DmabufWindow {
     fn press_key(
         &mut self,
         _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
         _: u32,
         event: KeyEvent,
     ) {
-        println!("Key press: {event:?}");
+        let digit_transform = match event.keysym {
+            Keysym::_1 => Some(TRANSFORMS[0]),
+            Keysym::_2 => Some(TRANSFORMS[1]),
+            Keysym::_3 => Some(TRANSFORMS[2]),
+            Keysym::_4 => Some(TRANSFORMS[3]),
+            Keysym::_5 => Some(TRANSFORMS[4]),
+            Keysym::_6 => Some(TRANSFORMS[5]),
+            Keysym::_7 => Some(TRANSFORMS[6]),
+            Keysym::_8 => Some(TRANSFORMS[7]),
+            _ => None,
+        };
 
         if event.keysym == Keysym::space {
             self.use_y_invert = !self.use_y_invert;
-            println!(
-                "Switched to {} buffer",
-                if self.use_y_invert {
-                    "y_invert"
-                } else {
-                    "normal"
-                }
-            );
+            self.rebuild_buffer(qh);
+            self.draw();
+        } else if let Some(transform) = digit_transform {
+            self.buffer_transform = transform;
+            self.rebuild_buffer(qh);
             self.draw();
         }
     }
@@ -641,9 +673,8 @@ impl KeyboardHandler for DmabufWindow {
         _: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
         _: u32,
-        event: KeyEvent,
+        _event: KeyEvent,
     ) {
-        println!("Key repeat: {event:?}");
     }
 
     fn release_key(
@@ -652,9 +683,8 @@ impl KeyboardHandler for DmabufWindow {
         _: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
         _: u32,
-        event: KeyEvent,
+        _event: KeyEvent,
     ) {
-        println!("Key release: {event:?}");
     }
 
     fn update_modifiers(
@@ -663,11 +693,10 @@ impl KeyboardHandler for DmabufWindow {
         _: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
         _serial: u32,
-        modifiers: Modifiers,
+        _modifiers: Modifiers,
         _raw_modifiers: RawModifiers,
         _layout: u32,
     ) {
-        println!("Update modifiers: {modifiers:?}");
     }
 }
 
@@ -679,35 +708,7 @@ impl PointerHandler for DmabufWindow {
         _pointer: &wl_pointer::WlPointer,
         events: &[PointerEvent],
     ) {
-        use PointerEventKind::*;
-        for event in events {
-            if &event.surface != self.window.wl_surface() {
-                continue;
-            }
-
-            match event.kind {
-                Enter { .. } => {
-                    println!("Pointer entered @{:?}", event.position);
-                }
-                Leave { .. } => {
-                    println!("Pointer left");
-                }
-                Motion { .. } => {}
-                Press { button, .. } => {
-                    println!("Press {:x} @ {:?}", button, event.position);
-                }
-                Release { button, .. } => {
-                    println!("Release {:x} @ {:?}", button, event.position);
-                }
-                Axis {
-                    horizontal,
-                    vertical,
-                    ..
-                } => {
-                    println!("Scroll H:{horizontal:?}, V:{vertical:?}");
-                }
-            }
-        }
+        let _ = events;
     }
 }
 
