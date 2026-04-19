@@ -36,3 +36,7 @@ path = "src/blur_region_switch_half.rs"
 [[bin]]
 name = "background_layer_frame_callbacks"
 path = "src/background_layer_frame_callbacks.rs"
+
+[[bin]]
+name = "fullscreen_on_disabled_output"
+path = "src/fullscreen_on_disabled_output.rs"

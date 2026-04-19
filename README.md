@@ -6,3 +6,4 @@ these are mostly vibe coded
 - `layer_shell_popups`: layer surface with popups on left click and subsurface on right click, with ext-background-effect blur
 - `blur_region_switch_half`: toplevel with ext-background-effect blur on one half, press Space to switch halves (only blur region changes, no buffer damage)
 - `background_layer_frame_callbacks`: layer surface on the background layer split in two halves, the left half constantly damages and redraws every frame callback
+- `fullscreen_on_disabled_output`: as soon as a wl_output global is removed, calls xdg_toplevel::set_fullscreen on that output
