@@ -6,38 +6,30 @@
 //! compositor handles everything correctly.
 
 use std::os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd};
-use std::time::Duration;
 
-use smithay_client_toolkit::reexports::calloop::{EventLoop, LoopHandle};
-use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
-use smithay_client_toolkit::{
-    compositor::{CompositorHandler, CompositorState},
-    delegate_compositor, delegate_dmabuf, delegate_keyboard, delegate_output, delegate_pointer,
-    delegate_registry, delegate_seat, delegate_xdg_shell, delegate_xdg_window,
-    dmabuf::{DmabufFeedback, DmabufHandler, DmabufState},
-    output::{OutputHandler, OutputState},
-    registry::{ProvidesRegistryState, RegistryState},
-    registry_handlers,
-    seat::{
-        keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
-        pointer::{PointerEvent, PointerHandler},
-        Capability, SeatHandler, SeatState,
-    },
-    shell::{
-        xdg::{
-            window::{Window, WindowConfigure, WindowDecorations, WindowHandler},
-            XdgShell,
-        },
-        WaylandSurface,
-    },
+use sctk::compositor::{CompositorHandler, CompositorState};
+use sctk::dmabuf::{DmabufFeedback, DmabufHandler, DmabufState};
+use sctk::output::{OutputHandler, OutputState};
+use sctk::reexports::calloop::{EventLoop, LoopHandle};
+use sctk::reexports::calloop_wayland_source::WaylandSource;
+use sctk::reexports::client::globals::registry_queue_init;
+use sctk::reexports::client::protocol::{
+    wl_buffer, wl_keyboard, wl_output, wl_pointer, wl_seat, wl_surface,
 };
-use wayland_client::{
-    globals::registry_queue_init,
-    protocol::{wl_buffer, wl_keyboard, wl_output, wl_pointer, wl_seat, wl_surface},
-    Connection, QueueHandle,
-};
-use wayland_protocols::wp::linux_dmabuf::zv1::client::{
+use sctk::reexports::client::{Connection, QueueHandle};
+use sctk::reexports::protocols::wp::linux_dmabuf::zv1::client::{
     zwp_linux_buffer_params_v1, zwp_linux_dmabuf_feedback_v1,
+};
+use sctk::registry::{ProvidesRegistryState, RegistryState};
+use sctk::seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers};
+use sctk::seat::pointer::{PointerEvent, PointerHandler};
+use sctk::seat::{Capability, SeatHandler, SeatState};
+use sctk::shell::WaylandSurface;
+use sctk::shell::xdg::XdgShell;
+use sctk::shell::xdg::window::{Window, WindowConfigure, WindowDecorations, WindowHandler};
+use sctk::{
+    delegate_compositor, delegate_dmabuf, delegate_keyboard, delegate_output, delegate_pointer,
+    delegate_registry, delegate_seat, delegate_xdg_shell, delegate_xdg_window, registry_handlers,
 };
 
 // --- DRM dumb buffer helpers ---
@@ -355,9 +347,7 @@ fn main() {
     };
 
     loop {
-        event_loop
-            .dispatch(Duration::from_millis(16), &mut app)
-            .unwrap();
+        event_loop.dispatch(None, &mut app).unwrap();
         if app.exit {
             println!("exiting example");
             break;
@@ -446,8 +436,8 @@ impl DmabufWindow {
 impl CompositorHandler for DmabufWindow {
     fn scale_factor_changed(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         _new_factor: i32,
     ) {
@@ -455,8 +445,8 @@ impl CompositorHandler for DmabufWindow {
 
     fn transform_changed(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         _new_transform: wl_output::Transform,
     ) {
@@ -464,8 +454,8 @@ impl CompositorHandler for DmabufWindow {
 
     fn frame(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         _time: u32,
     ) {
@@ -473,8 +463,8 @@ impl CompositorHandler for DmabufWindow {
 
     fn surface_enter(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         _output: &wl_output::WlOutput,
     ) {
@@ -482,8 +472,8 @@ impl CompositorHandler for DmabufWindow {
 
     fn surface_leave(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         _output: &wl_output::WlOutput,
     ) {
@@ -495,26 +485,20 @@ impl OutputHandler for DmabufWindow {
         &mut self.output_state
     }
 
-    fn new_output(
-        &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _output: wl_output::WlOutput,
-    ) {
-    }
+    fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _output: wl_output::WlOutput) {}
 
     fn update_output(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _output: wl_output::WlOutput,
     ) {
     }
 
     fn output_destroyed(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _output: wl_output::WlOutput,
     ) {
     }
@@ -527,7 +511,7 @@ impl WindowHandler for DmabufWindow {
 
     fn configure(
         &mut self,
-        _conn: &Connection,
+        _: &Connection,
         qh: &QueueHandle<Self>,
         _window: &Window,
         configure: WindowConfigure,
@@ -559,7 +543,7 @@ impl SeatHandler for DmabufWindow {
 
     fn new_capability(
         &mut self,
-        _conn: &Connection,
+        _: &Connection,
         qh: &QueueHandle<Self>,
         seat: wl_seat::WlSeat,
         capability: Capability,
@@ -589,17 +573,21 @@ impl SeatHandler for DmabufWindow {
 
     fn remove_capability(
         &mut self,
-        _conn: &Connection,
+        _: &Connection,
         _: &QueueHandle<Self>,
         _: wl_seat::WlSeat,
         capability: Capability,
     ) {
-        if capability == Capability::Keyboard && self.keyboard.is_some() {
-            self.keyboard.take().unwrap().release();
+        if capability == Capability::Keyboard
+            && let Some(kbd) = self.keyboard.take()
+        {
+            kbd.release();
         }
 
-        if capability == Capability::Pointer && self.pointer.is_some() {
-            self.pointer.take().unwrap().release();
+        if capability == Capability::Pointer
+            && let Some(ptr) = self.pointer.take()
+        {
+            ptr.release();
         }
     }
 
@@ -638,7 +626,7 @@ impl KeyboardHandler for DmabufWindow {
 
     fn press_key(
         &mut self,
-        _conn: &Connection,
+        _: &Connection,
         qh: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
         _: u32,
@@ -703,8 +691,8 @@ impl KeyboardHandler for DmabufWindow {
 impl PointerHandler for DmabufWindow {
     fn pointer_frame(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _pointer: &wl_pointer::WlPointer,
         events: &[PointerEvent],
     ) {
@@ -719,8 +707,8 @@ impl DmabufHandler for DmabufWindow {
 
     fn dmabuf_feedback(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _proxy: &zwp_linux_dmabuf_feedback_v1::ZwpLinuxDmabufFeedbackV1,
         feedback: DmabufFeedback,
     ) {
@@ -729,8 +717,8 @@ impl DmabufHandler for DmabufWindow {
 
     fn created(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _params: &zwp_linux_buffer_params_v1::ZwpLinuxBufferParamsV1,
         _buffer: wl_buffer::WlBuffer,
     ) {
@@ -739,20 +727,14 @@ impl DmabufHandler for DmabufWindow {
 
     fn failed(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _params: &zwp_linux_buffer_params_v1::ZwpLinuxBufferParamsV1,
     ) {
         panic!("Failed to create dmabuf buffer");
     }
 
-    fn released(
-        &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _buffer: &wl_buffer::WlBuffer,
-    ) {
-    }
+    fn released(&mut self, _: &Connection, _: &QueueHandle<Self>, _buffer: &wl_buffer::WlBuffer) {}
 }
 
 delegate_compositor!(DmabufWindow);

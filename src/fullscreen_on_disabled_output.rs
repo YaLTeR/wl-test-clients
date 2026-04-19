@@ -1,29 +1,19 @@
-use std::time::Duration;
-
-use smithay_client_toolkit::reexports::calloop::EventLoop;
-use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
-use smithay_client_toolkit::{
-    compositor::{CompositorHandler, CompositorState},
+use sctk::compositor::{CompositorHandler, CompositorState};
+use sctk::output::{OutputHandler, OutputState};
+use sctk::reexports::calloop::EventLoop;
+use sctk::reexports::calloop_wayland_source::WaylandSource;
+use sctk::reexports::client::globals::registry_queue_init;
+use sctk::reexports::client::protocol::{wl_output, wl_shm, wl_surface};
+use sctk::reexports::client::{Connection, Dispatch, QueueHandle};
+use sctk::registry::{ProvidesRegistryState, RegistryState};
+use sctk::shell::WaylandSurface;
+use sctk::shell::xdg::XdgShell;
+use sctk::shell::xdg::window::{Window, WindowConfigure, WindowDecorations, WindowHandler};
+use sctk::shm::slot::{Buffer, SlotPool};
+use sctk::shm::{Shm, ShmHandler};
+use sctk::{
     delegate_compositor, delegate_output, delegate_registry, delegate_shm, delegate_xdg_shell,
     delegate_xdg_window,
-    output::{OutputHandler, OutputState},
-    registry::{ProvidesRegistryState, RegistryState},
-    shell::{
-        xdg::{
-            window::{Window, WindowConfigure, WindowDecorations, WindowHandler},
-            XdgShell,
-        },
-        WaylandSurface,
-    },
-    shm::{
-        slot::{Buffer, SlotPool},
-        Shm, ShmHandler,
-    },
-};
-use wayland_client::{
-    globals::registry_queue_init,
-    protocol::{wl_output, wl_shm, wl_surface},
-    Connection, Dispatch, QueueHandle,
 };
 
 const WINDOW_W: u32 = 400;
@@ -102,9 +92,7 @@ fn main() {
     );
 
     loop {
-        event_loop
-            .dispatch(Duration::from_millis(16), &mut app)
-            .unwrap();
+        event_loop.dispatch(None, &mut app).unwrap();
         if app.exit {
             break;
         }
@@ -226,8 +214,8 @@ impl WindowHandler for App {
 
     fn configure(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _window: &Window,
         configure: WindowConfigure,
         _serial: u32,
@@ -308,7 +296,7 @@ impl ProvidesRegistryState for App {
     fn runtime_remove_global(
         &mut self,
         _: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &QueueHandle<Self>,
         name: u32,
         interface: &str,
     ) {

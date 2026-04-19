@@ -1,29 +1,23 @@
 use std::time::Instant;
 
-use smithay_client_toolkit::reexports::calloop::EventLoop;
-use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
-use smithay_client_toolkit::{
-    compositor::{CompositorHandler, CompositorState},
-    delegate_compositor, delegate_layer, delegate_output, delegate_registry, delegate_shm,
-    output::{OutputHandler, OutputState},
-    registry::{ProvidesRegistryState, RegistryState},
-    registry_handlers,
-    shell::{
-        wlr_layer::{
-            Anchor, KeyboardInteractivity, Layer, LayerShell, LayerShellHandler, LayerSurface,
-            LayerSurfaceConfigure,
-        },
-        WaylandSurface,
-    },
-    shm::{
-        slot::{Buffer, SlotPool},
-        Shm, ShmHandler,
-    },
+use sctk::compositor::{CompositorHandler, CompositorState};
+use sctk::output::{OutputHandler, OutputState};
+use sctk::reexports::calloop::EventLoop;
+use sctk::reexports::calloop_wayland_source::WaylandSource;
+use sctk::reexports::client::globals::registry_queue_init;
+use sctk::reexports::client::protocol::{wl_output, wl_shm, wl_surface};
+use sctk::reexports::client::{Connection, QueueHandle};
+use sctk::registry::{ProvidesRegistryState, RegistryState};
+use sctk::shell::WaylandSurface;
+use sctk::shell::wlr_layer::{
+    Anchor, KeyboardInteractivity, Layer, LayerShell, LayerShellHandler, LayerSurface,
+    LayerSurfaceConfigure,
 };
-use wayland_client::{
-    globals::registry_queue_init,
-    protocol::{wl_output, wl_shm, wl_surface},
-    Connection, QueueHandle,
+use sctk::shm::slot::{Buffer, SlotPool};
+use sctk::shm::{Shm, ShmHandler};
+use sctk::{
+    delegate_compositor, delegate_layer, delegate_output, delegate_registry, delegate_shm,
+    registry_handlers,
 };
 
 fn main() {
@@ -181,8 +175,8 @@ impl App {
 impl CompositorHandler for App {
     fn scale_factor_changed(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         _new_factor: i32,
     ) {
@@ -190,8 +184,8 @@ impl CompositorHandler for App {
 
     fn transform_changed(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         _new_transform: wl_output::Transform,
     ) {
@@ -199,8 +193,8 @@ impl CompositorHandler for App {
 
     fn frame(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        qh: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         _time: u32,
     ) {
@@ -220,13 +214,13 @@ impl CompositorHandler for App {
 
         self.last_frame = Some(now);
 
-        self.submit_frame(_qh);
+        self.submit_frame(qh);
     }
 
     fn surface_enter(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         _output: &wl_output::WlOutput,
     ) {
@@ -234,8 +228,8 @@ impl CompositorHandler for App {
 
     fn surface_leave(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         _output: &wl_output::WlOutput,
     ) {
@@ -253,14 +247,14 @@ impl OutputHandler for App {
 }
 
 impl LayerShellHandler for App {
-    fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _layer: &LayerSurface) {
+    fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, _layer: &LayerSurface) {
         self.exit = true;
     }
 
     fn configure(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        qh: &QueueHandle<Self>,
         _layer: &LayerSurface,
         configure: LayerSurfaceConfigure,
         _serial: u32,
@@ -292,7 +286,7 @@ impl LayerShellHandler for App {
                 .expect("buffer attach");
             let surface = self.layer_surface.wl_surface();
             surface.damage_buffer(0, 0, self.width as i32, self.height as i32);
-            surface.frame(_qh, surface.clone());
+            surface.frame(qh, surface.clone());
             surface.commit();
             self.current_buf ^= 1;
         }

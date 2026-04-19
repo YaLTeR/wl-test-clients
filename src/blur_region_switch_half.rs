@@ -1,38 +1,27 @@
-use std::time::Duration;
-
-use smithay_client_toolkit::reexports::calloop::EventLoop;
-use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
-use smithay_client_toolkit::reexports::protocols::ext::background_effect::v1::client::ext_background_effect_surface_v1;
-use smithay_client_toolkit::{
-    background_effect::{BackgroundEffectHandler, BackgroundEffectState},
-    compositor::{CompositorHandler, CompositorState},
+use sctk::background_effect::{BackgroundEffectHandler, BackgroundEffectState};
+use sctk::compositor::{CompositorHandler, CompositorState};
+use sctk::output::{OutputHandler, OutputState};
+use sctk::reexports::calloop::EventLoop;
+use sctk::reexports::calloop_wayland_source::WaylandSource;
+use sctk::reexports::client::globals::registry_queue_init;
+use sctk::reexports::client::protocol::{
+    wl_keyboard, wl_output, wl_pointer, wl_region, wl_seat, wl_shm, wl_surface,
+};
+use sctk::reexports::client::{Connection, Dispatch, QueueHandle};
+use sctk::reexports::protocols::ext::background_effect::v1::client::ext_background_effect_surface_v1;
+use sctk::registry::{ProvidesRegistryState, RegistryState};
+use sctk::seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers};
+use sctk::seat::pointer::{PointerEvent, PointerHandler};
+use sctk::seat::{Capability, SeatHandler, SeatState};
+use sctk::shell::WaylandSurface;
+use sctk::shell::xdg::XdgShell;
+use sctk::shell::xdg::window::{Window, WindowConfigure, WindowDecorations, WindowHandler};
+use sctk::shm::slot::{Buffer, SlotPool};
+use sctk::shm::{Shm, ShmHandler};
+use sctk::{
     delegate_background_effect, delegate_compositor, delegate_keyboard, delegate_output,
     delegate_pointer, delegate_registry, delegate_seat, delegate_shm, delegate_xdg_shell,
-    delegate_xdg_window,
-    output::{OutputHandler, OutputState},
-    registry::{ProvidesRegistryState, RegistryState},
-    registry_handlers,
-    seat::{
-        keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
-        pointer::{PointerEvent, PointerHandler},
-        Capability, SeatHandler, SeatState,
-    },
-    shell::{
-        xdg::{
-            window::{Window, WindowConfigure, WindowDecorations, WindowHandler},
-            XdgShell,
-        },
-        WaylandSurface,
-    },
-    shm::{
-        slot::{Buffer, SlotPool},
-        Shm, ShmHandler,
-    },
-};
-use wayland_client::{
-    globals::registry_queue_init,
-    protocol::{wl_keyboard, wl_output, wl_pointer, wl_region, wl_seat, wl_shm, wl_surface},
-    Connection, Dispatch, QueueHandle,
+    delegate_xdg_window, registry_handlers,
 };
 
 const WINDOW_W: u32 = 400;
@@ -118,9 +107,7 @@ fn main() {
     println!("Q/Escape to quit.");
 
     loop {
-        event_loop
-            .dispatch(Duration::from_millis(16), &mut app)
-            .unwrap();
+        event_loop.dispatch(None, &mut app).unwrap();
         if app.exit {
             println!("exiting");
             break;
@@ -227,8 +214,8 @@ impl App {
 impl CompositorHandler for App {
     fn scale_factor_changed(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         _new_factor: i32,
     ) {
@@ -236,8 +223,8 @@ impl CompositorHandler for App {
 
     fn transform_changed(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         _new_transform: wl_output::Transform,
     ) {
@@ -245,8 +232,8 @@ impl CompositorHandler for App {
 
     fn frame(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         _time: u32,
     ) {
@@ -254,8 +241,8 @@ impl CompositorHandler for App {
 
     fn surface_enter(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         _output: &wl_output::WlOutput,
     ) {
@@ -263,8 +250,8 @@ impl CompositorHandler for App {
 
     fn surface_leave(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         _output: &wl_output::WlOutput,
     ) {
@@ -288,7 +275,7 @@ impl WindowHandler for App {
 
     fn configure(
         &mut self,
-        _conn: &Connection,
+        _: &Connection,
         qh: &QueueHandle<Self>,
         _window: &Window,
         configure: WindowConfigure,
@@ -319,7 +306,7 @@ impl SeatHandler for App {
 
     fn new_capability(
         &mut self,
-        _conn: &Connection,
+        _: &Connection,
         qh: &QueueHandle<Self>,
         seat: wl_seat::WlSeat,
         capability: Capability,
@@ -343,20 +330,20 @@ impl SeatHandler for App {
 
     fn remove_capability(
         &mut self,
-        _conn: &Connection,
+        _: &Connection,
         _: &QueueHandle<Self>,
         _: wl_seat::WlSeat,
         capability: Capability,
     ) {
-        if capability == Capability::Keyboard {
-            if let Some(kbd) = self.keyboard.take() {
-                kbd.release();
-            }
+        if capability == Capability::Keyboard
+            && let Some(kbd) = self.keyboard.take()
+        {
+            kbd.release();
         }
-        if capability == Capability::Pointer {
-            if let Some(ptr) = self.pointer.take() {
-                ptr.release();
-            }
+        if capability == Capability::Pointer
+            && let Some(ptr) = self.pointer.take()
+        {
+            ptr.release();
         }
     }
 
@@ -388,7 +375,7 @@ impl KeyboardHandler for App {
 
     fn press_key(
         &mut self,
-        _conn: &Connection,
+        _: &Connection,
         qh: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
         _: u32,
@@ -446,8 +433,8 @@ impl KeyboardHandler for App {
 impl PointerHandler for App {
     fn pointer_frame(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _pointer: &wl_pointer::WlPointer,
         _events: &[PointerEvent],
     ) {

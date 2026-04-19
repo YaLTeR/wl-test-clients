@@ -1,14 +1,13 @@
 [package]
 name = "sctk-test-clients"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-wayland-client = "0.31.1"
-wayland-protocols = { version = "0.32.9", features = ["client", "staging", "unstable"] }
 libc = "0.2"
 
-[dependencies.smithay-client-toolkit]
+[dependencies.sctk]
+package = "smithay-client-toolkit"
 git = "https://github.com/Smithay/client-toolkit.git"
 # ext-background-effect merged
 rev = "99ddfec6bc68d3a5d47d9554f973b34aebab0b83"

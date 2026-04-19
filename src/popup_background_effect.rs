@@ -1,42 +1,31 @@
-use std::time::Duration;
-
-use smithay_client_toolkit::reexports::calloop::{EventLoop, LoopHandle};
-use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
-use smithay_client_toolkit::reexports::protocols::ext::background_effect::v1::client::ext_background_effect_surface_v1;
-use smithay_client_toolkit::{
-    background_effect::{BackgroundEffectHandler, BackgroundEffectState},
-    compositor::{CompositorHandler, CompositorState},
+use sctk::background_effect::{BackgroundEffectHandler, BackgroundEffectState};
+use sctk::compositor::{CompositorHandler, CompositorState};
+use sctk::output::{OutputHandler, OutputState};
+use sctk::reexports::calloop::{EventLoop, LoopHandle};
+use sctk::reexports::calloop_wayland_source::WaylandSource;
+use sctk::reexports::client::globals::registry_queue_init;
+use sctk::reexports::client::protocol::{
+    wl_keyboard, wl_output, wl_pointer, wl_region, wl_seat, wl_shm, wl_surface,
+};
+use sctk::reexports::client::{Connection, Dispatch, QueueHandle};
+use sctk::reexports::protocols::ext::background_effect::v1::client::ext_background_effect_surface_v1;
+use sctk::reexports::protocols::xdg::shell::client::xdg_positioner::{
+    Anchor, ConstraintAdjustment, Gravity,
+};
+use sctk::registry::{ProvidesRegistryState, RegistryState};
+use sctk::seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers};
+use sctk::seat::pointer::{PointerEvent, PointerEventKind, PointerHandler};
+use sctk::seat::{Capability, SeatHandler, SeatState};
+use sctk::shell::WaylandSurface;
+use sctk::shell::xdg::popup::{Popup, PopupConfigure, PopupHandler};
+use sctk::shell::xdg::window::{Window, WindowConfigure, WindowDecorations, WindowHandler};
+use sctk::shell::xdg::{XdgPositioner, XdgShell, XdgSurface};
+use sctk::shm::slot::{Buffer, SlotPool};
+use sctk::shm::{Shm, ShmHandler};
+use sctk::{
     delegate_background_effect, delegate_compositor, delegate_keyboard, delegate_output,
     delegate_pointer, delegate_registry, delegate_seat, delegate_shm, delegate_xdg_popup,
-    delegate_xdg_shell, delegate_xdg_window,
-    output::{OutputHandler, OutputState},
-    registry::{ProvidesRegistryState, RegistryState},
-    registry_handlers,
-    seat::{
-        keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
-        pointer::{PointerEvent, PointerEventKind, PointerHandler},
-        Capability, SeatHandler, SeatState,
-    },
-    shell::{
-        xdg::{
-            popup::{Popup, PopupConfigure, PopupHandler},
-            window::{Window, WindowConfigure, WindowDecorations, WindowHandler},
-            XdgPositioner, XdgShell, XdgSurface,
-        },
-        WaylandSurface,
-    },
-    shm::{
-        slot::{Buffer, SlotPool},
-        Shm, ShmHandler,
-    },
-};
-use wayland_client::{
-    globals::registry_queue_init,
-    protocol::{wl_keyboard, wl_output, wl_pointer, wl_region, wl_seat, wl_shm, wl_surface},
-    Connection, Dispatch, QueueHandle,
-};
-use wayland_protocols::xdg::shell::client::xdg_positioner::{
-    Anchor, ConstraintAdjustment, Gravity,
+    delegate_xdg_shell, delegate_xdg_window, registry_handlers,
 };
 
 // Default sizes.
@@ -116,9 +105,7 @@ fn main() {
     println!("  Q/Escape - quit");
 
     loop {
-        event_loop
-            .dispatch(Duration::from_millis(16), &mut app)
-            .unwrap();
+        event_loop.dispatch(None, &mut app).unwrap();
         if app.exit {
             println!("exiting example");
             break;
@@ -564,8 +551,8 @@ impl App {
 impl CompositorHandler for App {
     fn scale_factor_changed(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         _new_factor: i32,
     ) {
@@ -573,8 +560,8 @@ impl CompositorHandler for App {
 
     fn transform_changed(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         _new_transform: wl_output::Transform,
     ) {
@@ -582,8 +569,8 @@ impl CompositorHandler for App {
 
     fn frame(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         _time: u32,
     ) {
@@ -591,8 +578,8 @@ impl CompositorHandler for App {
 
     fn surface_enter(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         _output: &wl_output::WlOutput,
     ) {
@@ -600,8 +587,8 @@ impl CompositorHandler for App {
 
     fn surface_leave(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _surface: &wl_surface::WlSurface,
         _output: &wl_output::WlOutput,
     ) {
@@ -625,8 +612,8 @@ impl WindowHandler for App {
 
     fn configure(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _window: &Window,
         configure: WindowConfigure,
         _serial: u32,
@@ -649,7 +636,7 @@ impl WindowHandler for App {
 impl PopupHandler for App {
     fn configure(
         &mut self,
-        _conn: &Connection,
+        _: &Connection,
         qh: &QueueHandle<Self>,
         popup: &Popup,
         _config: PopupConfigure,
@@ -671,7 +658,7 @@ impl PopupHandler for App {
         }
     }
 
-    fn done(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, popup: &Popup) {
+    fn done(&mut self, _: &Connection, _: &QueueHandle<Self>, popup: &Popup) {
         if self.child_popup.as_ref().is_some_and(|p| &p.popup == popup) {
             if let Some(mut child) = self.child_popup.take() {
                 if let Some(bg) = child.bg_effect_surface.take() {
@@ -697,7 +684,7 @@ impl SeatHandler for App {
 
     fn new_capability(
         &mut self,
-        _conn: &Connection,
+        _: &Connection,
         qh: &QueueHandle<Self>,
         seat: wl_seat::WlSeat,
         capability: Capability,
@@ -729,20 +716,20 @@ impl SeatHandler for App {
 
     fn remove_capability(
         &mut self,
-        _conn: &Connection,
+        _: &Connection,
         _: &QueueHandle<Self>,
         _: wl_seat::WlSeat,
         capability: Capability,
     ) {
-        if capability == Capability::Keyboard {
-            if let Some(kbd) = self.keyboard.take() {
-                kbd.release();
-            }
+        if capability == Capability::Keyboard
+            && let Some(kbd) = self.keyboard.take()
+        {
+            kbd.release();
         }
-        if capability == Capability::Pointer {
-            if let Some(ptr) = self.pointer.take() {
-                ptr.release();
-            }
+        if capability == Capability::Pointer
+            && let Some(ptr) = self.pointer.take()
+        {
+            ptr.release();
         }
     }
 
@@ -776,7 +763,7 @@ impl KeyboardHandler for App {
 
     fn press_key(
         &mut self,
-        _conn: &Connection,
+        _: &Connection,
         qh: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
         _: u32,
@@ -878,7 +865,7 @@ impl KeyboardHandler for App {
 impl PointerHandler for App {
     fn pointer_frame(
         &mut self,
-        _conn: &Connection,
+        _: &Connection,
         qh: &QueueHandle<Self>,
         _pointer: &wl_pointer::WlPointer,
         events: &[PointerEvent],
