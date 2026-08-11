@@ -47,3 +47,7 @@ path = "src/fullscreen_on_disabled_output.rs"
 [[bin]]
 name = "pointer_lock_position_hint"
 path = "src/pointer_lock_position_hint.rs"
+
+[[bin]]
+name = "delayed_get_input_devices"
+path = "src/delayed_get_input_devices.rs"

@@ -9,3 +9,4 @@ these are mostly vibe coded
 - `fullscreen_on_disabled_output`: as soon as a wl_output global is removed, calls xdg_toplevel::set_fullscreen on that output
 - `pointer_lock_position_hint`: locks the pointer and eagerly commits cursor position hints, left click toggles the lock
 - `popup_desync_subsurface_frame_callbacks`: xdg-popup containing an animated desynchronized subsurface; only the subsurface requests frame callbacks and commits
+- `delayed_get_input_devices`: renders a toplevel, waits one second, then binds pointer/keyboard/touch/tablet objects and warns about events missing their required enter/down/proximity-in event
