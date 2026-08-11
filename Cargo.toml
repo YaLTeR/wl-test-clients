@@ -39,3 +39,7 @@ path = "src/background_layer_frame_callbacks.rs"
 [[bin]]
 name = "fullscreen_on_disabled_output"
 path = "src/fullscreen_on_disabled_output.rs"
+
+[[bin]]
+name = "pointer_lock_position_hint"
+path = "src/pointer_lock_position_hint.rs"
