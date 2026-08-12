@@ -10,3 +10,4 @@ these are mostly vibe coded
 - `pointer_lock_position_hint`: locks the pointer and eagerly commits cursor position hints, left click toggles the lock
 - `popup_desync_subsurface_frame_callbacks`: xdg-popup containing an animated desynchronized subsurface; only the subsurface requests frame callbacks and commits
 - `delayed_get_input_devices`: renders a toplevel, waits one second, then binds pointer/keyboard/touch/tablet objects and warns about events missing their required enter/down/proximity-in event
+- `window_frame_callbacks_presentation`: continuously renders a toplevel, prints frame callback and presentation time differences
