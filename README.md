@@ -11,3 +11,4 @@ these are mostly vibe coded
 - `popup_desync_subsurface_frame_callbacks`: xdg-popup containing an animated desynchronized subsurface; only the subsurface requests frame callbacks and commits
 - `delayed_get_input_devices`: renders a toplevel, waits one second, then binds pointer/keyboard/touch/tablet objects and warns about events missing their required enter/down/proximity-in event
 - `window_frame_callbacks_presentation`: continuously renders a toplevel, prints frame callback and presentation time differences
+- `text_input_popup_positioning`: text-input-v3 fields on a toplevel with geometry, an offset subsurface (Ctrl+S cycles its position, including overhanging), and a grabbing popup with geometry (right click); pass `layer` to use a layer surface instead (Ctrl+1..9 anchors it to screen edges)

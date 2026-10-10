@@ -55,3 +55,7 @@ path = "src/pointer_lock_position_hint.rs"
 [[bin]]
 name = "delayed_get_input_devices"
 path = "src/delayed_get_input_devices.rs"
+
+[[bin]]
+name = "text_input_popup_positioning"
+path = "src/text_input_popup_positioning.rs"
